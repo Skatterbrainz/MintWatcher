@@ -34,6 +34,8 @@ chmod +x mintwatcher.py
 
 ## Usage
 
+**Quick Start**: Run `./mintwatcher.py --start` to begin monitoring. Press `Ctrl+C` to stop, or use `./mintwatcher.py --stop` from another terminal to terminate all instances.
+
 ### Basic Commands
 ```bash
 # Show help
@@ -44,6 +46,9 @@ chmod +x mintwatcher.py
 
 # Start monitoring (foreground)
 ./mintwatcher.py --start
+
+# Stop all running instances
+./mintwatcher.py --stop
 
 # Show version
 ./mintwatcher.py --version

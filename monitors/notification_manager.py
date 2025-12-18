@@ -25,7 +25,7 @@ class NotificationManager:
         self.active_notifications = {}
         
     def send_notification(self, issue):
-        """Send a desktop notification for an issue"""
+        """Send notification and prompt for action in terminal"""
         if not self.config['notifications']['enabled']:
             return
             
@@ -40,44 +40,77 @@ class NotificationManager:
         if self._is_excluded(issue):
             return
             
-        # Create notification
-        notification = Notify.Notification.new(
-            issue['title'],
-            issue['message'],
-            self._get_icon_for_severity(issue['severity'])
-        )
-        
-        # Set timeout
-        notification.set_timeout(self.config['notifications']['timeout'])
-        
-        # Add action buttons
-        notification.add_action(
-            "ignore", "Ignore", 
-            self._ignore_callback, 
-            (issue, issue_id)
-        )
-        notification.add_action(
-            "show", "Show", 
-            self._show_callback, 
-            (issue, issue_id)
-        )
-        notification.add_action(
-            "investigate", "Investigate", 
-            self._investigate_callback, 
-            (issue, issue_id)
-        )
-        
-        # Set up cleanup when notification is closed
-        notification.connect('closed', self._notification_closed, issue_id)
-        
-        # Show notification
+        # Send desktop notification (simple, no buttons)
         try:
+            notification = Notify.Notification.new(
+                issue['title'],
+                issue['message'],
+                self._get_icon_for_severity(issue['severity'])
+            )
+            notification.set_timeout(5000)  # 5 seconds
             notification.show()
-            self.active_notifications[issue_id] = notification
-            print(f"Sent notification: {issue['title']}")
         except Exception as e:
             print(f"Failed to send notification: {e}")
             
+        # Display in terminal with interactive prompt
+        self._terminal_prompt(issue, issue_id)
+            
+    def _terminal_prompt(self, issue, issue_id):
+        """Display issue in terminal and prompt for action"""
+        import sys
+        
+        # Mark as active to prevent duplicates
+        self.active_notifications[issue_id] = True
+        
+        # Display the issue with colors
+        print("\n" + "="*60)
+        severity_color = "\033[91m" if issue['severity'] == 'critical' else "\033[93m"
+        reset_color = "\033[0m"
+        print(f"{severity_color}⚠ {issue['title']}{reset_color}")
+        print("="*60)
+        print(f"Message: {issue['message']}")
+        
+        # Show relevant data
+        issue_data = issue.get('data', {})
+        if issue_data:
+            print("\nDetails:")
+            for key, value in issue_data.items():
+                print(f"  {key}: {value}")
+        
+        print("\n" + "-"*60)
+        print("Actions:")
+        print("  [S]how    - View full details in text editor")
+        print("  [D]iagnose - Create Warp investigation script")
+        print("  [I]gnore  - Add to exclusions (won't alert again)")
+        print("  [Enter]   - Skip for now")
+        print("-"*60)
+        
+        try:
+            # Non-blocking input with timeout
+            response = input("Choose action (S/D/I/Enter): ").strip().lower()
+            
+            if response == 's':
+                print("Creating detailed report...")
+                self._show_issue_details(issue)
+            elif response == 'd':
+                print("Creating investigation script...")
+                self._launch_warp_investigation(issue)
+            elif response == 'i':
+                print("Adding to exclusions...")
+                self._add_to_exclusions(issue)
+                print("Issue ignored. Won't alert again.")
+            else:
+                print("Skipped.")
+                
+        except (EOFError, KeyboardInterrupt):
+            print("\nSkipped.")
+        finally:
+            # Remove from active notifications
+            if issue_id in self.active_notifications:
+                del self.active_notifications[issue_id]
+        
+        print("")
+        
     def _generate_issue_id(self, issue):
         """Generate a unique ID for an issue type"""
         # Create ID based on issue type and key identifying information
@@ -118,54 +151,6 @@ class NotificationManager:
         }
         return icons.get(severity, 'dialog-information')
         
-    def _ignore_callback(self, notification, action, user_data):
-        """Handle 'Ignore' button click"""
-        issue, issue_id = user_data
-        
-        print(f"Ignoring issue: {issue['title']}")
-        
-        # Add to exclusions based on issue type
-        self._add_to_exclusions(issue)
-        
-        # Close notification
-        notification.close()
-        
-    def _show_callback(self, notification, action, user_data):
-        """Handle 'Show' button click"""
-        issue, issue_id = user_data
-        
-        print(f"Showing details for issue: {issue['title']}")
-        
-        # Show issue details in terminal
-        success = self._show_issue_details(issue)
-        
-        if not success:
-            # Fallback: create a command file
-            self._create_command_file(issue, "show")
-        
-        # Close notification
-        notification.close()
-        
-    def _investigate_callback(self, notification, action, user_data):
-        """Handle 'Investigate' button click"""
-        issue, issue_id = user_data
-        
-        print(f"Investigating issue: {issue['title']}")
-        
-        # Launch Warp Terminal with investigation prompt
-        success = self._launch_warp_investigation(issue)
-        
-        if not success:
-            # Fallback: create a command file
-            self._create_command_file(issue, "investigate")
-        
-        # Close notification
-        notification.close()
-        
-    def _notification_closed(self, notification, issue_id):
-        """Clean up when notification is closed"""
-        if issue_id in self.active_notifications:
-            del self.active_notifications[issue_id]
             
     def _add_to_exclusions(self, issue):
         """Add issue to exclusions list in config"""
@@ -261,18 +246,29 @@ echo ""
             # Make executable
             os.chmod(filepath, 0o755)
             
-            print(f"Investigation script created: {filepath}")
+            print(f"\n✓ Investigation script created: {filepath}")
+            print(f"  Opening in editor...")
             
-            # Open with default text editor using xdg-open (non-blocking)
-            subprocess.Popen(
-                ['xdg-open', filepath],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True
-            )
+            # Try to open with default editor
+            try:
+                subprocess.Popen(
+                    ['xed', filepath],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                print(f"  Opened with xed")
+            except:
+                try:
+                    subprocess.Popen(
+                        ['xdg-open', filepath],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    print(f"  Opened with xdg-open")
+                except:
+                    print(f"  Could not open automatically")
             
-            print(f"Opening investigation script in editor...")
-            print(f"To investigate, save and run: bash {filepath}")
+            print(f"\n  To investigate, run: bash {filepath}")
             return True
             
         except Exception as e:
@@ -337,17 +333,29 @@ echo ""
             with open(filepath, 'w') as f:
                 f.write(details)
             
-            print(f"Issue details saved to: {filepath}")
+            print(f"\n✓ Issue details saved to: {filepath}")
+            print(f"  Opening in editor...")
             
-            # Open with default text editor using xdg-open (non-blocking)
-            subprocess.Popen(
-                ['xdg-open', filepath],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True
-            )
+            # Try to open with default editor
+            try:
+                subprocess.Popen(
+                    ['xed', filepath],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                print(f"  Opened with xed")
+            except:
+                try:
+                    subprocess.Popen(
+                        ['xdg-open', filepath],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    print(f"  Opened with xdg-open")
+                except:
+                    print(f"  Could not open automatically. Open manually:")
+                    print(f"  xed {filepath}")
             
-            print(f"Opening file with default editor...")
             return True
             
         except Exception as e:

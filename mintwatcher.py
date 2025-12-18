@@ -84,6 +84,92 @@ class MintWatcher:
         if os.path.exists(pid_file):
             os.remove(pid_file)
             
+    def stop_all_instances(self):
+        """Stop all running MintWatcher processes"""
+        import subprocess
+        import signal
+        
+        print("Searching for running MintWatcher processes...")
+        
+        stopped_count = 0
+        current_pid = os.getpid()
+        
+        # Method 1: Check PID file
+        pid_file = self.config['daemon']['pid_file']
+        if os.path.exists(pid_file):
+            try:
+                with open(pid_file, 'r') as f:
+                    pid = int(f.read().strip())
+                
+                if pid != current_pid:
+                    print(f"Found MintWatcher process (PID: {pid}) from PID file")
+                    try:
+                        os.kill(pid, signal.SIGTERM)
+                        print(f"Sent SIGTERM to process {pid}")
+                        stopped_count += 1
+                        
+                        # Wait briefly and check if it's still running
+                        import time
+                        time.sleep(1)
+                        try:
+                            os.kill(pid, 0)  # Check if process exists
+                            print(f"Process {pid} still running, sending SIGKILL...")
+                            os.kill(pid, signal.SIGKILL)
+                        except OSError:
+                            print(f"Process {pid} terminated successfully")
+                            
+                    except OSError as e:
+                        print(f"Could not terminate process {pid}: {e}")
+                        
+                # Remove stale PID file
+                os.remove(pid_file)
+                print(f"Removed PID file: {pid_file}")
+                
+            except (ValueError, OSError) as e:
+                print(f"Error reading PID file: {e}")
+                
+        # Method 2: Search for mintwatcher processes using ps
+        try:
+            result = subprocess.run(
+                ['ps', 'aux'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            for line in result.stdout.split('\n'):
+                if 'mintwatcher.py' in line and 'python' in line:
+                    # Parse the PID from ps output
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            pid = int(parts[1])
+                            
+                            # Don't kill ourselves
+                            if pid == current_pid:
+                                continue
+                                
+                            print(f"Found MintWatcher process (PID: {pid})")
+                            print(f"  Command: {' '.join(parts[10:15])}...")  # Show command
+                            
+                            try:
+                                os.kill(pid, signal.SIGTERM)
+                                print(f"Sent SIGTERM to process {pid}")
+                                stopped_count += 1
+                            except OSError as e:
+                                print(f"Could not terminate process {pid}: {e}")
+                                
+                        except (ValueError, IndexError):
+                            continue
+                            
+        except subprocess.CalledProcessError as e:
+            print(f"Error searching for processes: {e}")
+            
+        if stopped_count > 0:
+            print(f"\nStopped {stopped_count} MintWatcher process(es)")
+        else:
+            print("No running MintWatcher processes found")
+            
     def is_running(self):
         """Check if MintWatcher daemon is running"""
         pid_file = self.config['daemon']['pid_file']
@@ -147,6 +233,7 @@ def main():
     parser.add_argument('--enable', action='store_true', help='Enable monitoring daemon')
     parser.add_argument('--disable', action='store_true', help='Disable monitoring daemon')
     parser.add_argument('--start', action='store_true', help='Start monitoring (foreground)')
+    parser.add_argument('--stop', action='store_true', help='Stop all running MintWatcher processes')
     
     args = parser.parse_args()
     
@@ -158,6 +245,8 @@ def main():
     
     if args.status:
         watcher.get_status()
+    elif args.stop:
+        watcher.stop_all_instances()
     elif args.enable:
         # TODO: Create systemd service
         print("Creating systemd service for MintWatcher...")
