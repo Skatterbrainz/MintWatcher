@@ -60,17 +60,29 @@ Edit `config.yaml` to customize:
 When issues are detected, desktop notifications appear with three buttons:
 
 - **Ignore**: Adds the issue to exclusions list in `config.yaml` so it won't alert again
-- **Show**: Opens a new terminal window displaying:
-  - Issue type, severity, and details
+- **Show**: Opens a text file in your default editor containing:
+  - Issue type, severity, and title
   - All relevant data points
   - Recent system logs (for log-related issues)
-  - Stays open for you to review
-- **Investigate**: Launches Warp Terminal with AI-powered diagnostic prompts:
-  - Automatically formats investigation questions
-  - Provides context-specific details
-  - Leverages Warp's AI for root cause analysis
+  - Saved to `~/MintWatcher_Reports/` for future reference
+- **Investigate**: Creates and opens an executable investigation script:
+  - Pre-configured with Warp Terminal AI commands
+  - Includes context-specific investigation prompts
+  - Saved to `~/MintWatcher_Commands/` for easy execution
+  - Simply save and run the script to start investigation
 
-**Note**: If terminal windows don't open automatically, MintWatcher creates executable scripts in `~/MintWatcher_Commands/` that you can run manually. Each script is timestamped and contains the exact command that would have been executed.
+**File Locations**:
+- Issue reports: `~/MintWatcher_Reports/mintwatcher_issue_*.txt`
+- Investigation scripts: `~/MintWatcher_Commands/investigate_*.sh`
+
+### Example Workflow
+1. MintWatcher detects high CPU usage and shows a notification
+2. Click **"Show"** → Text file opens with process details
+3. Review the information in your text editor
+4. Click **"Investigate"** → Investigation script opens
+5. Save the script and run it: `bash ~/MintWatcher_Commands/investigate_*.sh`
+6. Warp Terminal launches with AI-powered diagnostics
+7. If it's a false positive, click **"Ignore"** to suppress future alerts
 
 ## Configuration Options
 

@@ -201,7 +201,7 @@ class NotificationManager:
             print(f"Added exclusion for {issue_type}")
             
     def _launch_warp_investigation(self, issue):
-        """Launch Warp Terminal with investigation prompt"""
+        """Create investigation script and open for review/execution"""
         issue_type = issue['type']
         issue_data = issue.get('data', {})
         
@@ -221,168 +221,138 @@ class NotificationManager:
         warp_command = self.config['warp']['terminal_command']
         
         try:
-            return self._launch_terminal_command(warp_command, 'agent', 'run', '--prompt', prompt)
+            # Create investigation script
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"investigate_{issue_type}_{timestamp}.sh"
+            filepath = os.path.expanduser(f"~/MintWatcher_Commands/{filename}")
+            
+            # Create directory if needed
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            
+            # Create script with detailed comments
+            script_content = f"""#!/bin/bash
+# MintWatcher Investigation Script
+# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+# Issue: {issue['title']}
+# Type: {issue_type}
+# Severity: {issue['severity']}
+
+# This script will launch Warp Terminal AI to investigate the issue.
+# Simply run this script to start the investigation:
+#   bash {filename}
+# Or make it executable and run:
+#   chmod +x {filename}
+#   ./{filename}
+
+echo "MintWatcher Investigation"
+echo "========================="
+echo "Issue: {issue['title']}"
+echo ""
+echo "Launching Warp Terminal AI..."
+echo ""
+
+# Run Warp Terminal with investigation prompt
+{warp_command} agent run --prompt '{prompt}'
+"""
+            
+            with open(filepath, 'w') as f:
+                f.write(script_content)
+            
+            # Make executable
+            os.chmod(filepath, 0o755)
+            
+            print(f"Investigation script created: {filepath}")
+            
+            # Open with default text editor using xdg-open (non-blocking)
+            subprocess.Popen(
+                ['xdg-open', filepath],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            
+            print(f"Opening investigation script in editor...")
+            print(f"To investigate, save and run: bash {filepath}")
+            return True
             
         except Exception as e:
-            print(f"Failed to launch investigation terminal: {e}")
+            print(f"Failed to create investigation script: {e}")
             print(f"Investigation prompt: {prompt}")
             return False
             
     def _show_issue_details(self, issue):
-        """Show issue details in terminal window"""
+        """Show issue details by creating and opening a text file"""
+        import tempfile
+        import subprocess
+        
         issue_type = issue['type']
         issue_data = issue.get('data', {})
         
-        # Create detailed display of the issue
-        details = f"MintWatcher Issue Details:\n\n"
-        details += f"Type: {issue_type}\n"
-        details += f"Severity: {issue['severity']}\n"
-        details += f"Title: {issue['title']}\n"
-        details += f"Message: {issue['message']}\n\n"
-        
-        if issue_data:
-            details += "Additional Data:\n"
-            for key, value in issue_data.items():
-                details += f"  {key}: {value}\n"
-        
-        # For log errors, show recent logs
-        if issue_type == 'system_error':
-            details += "\n" + "="*50 + "\n"
-            details += "Recent System Logs:\n"
-            details += "="*50 + "\n"
-            
         try:
-            # Create a command to display the details
-            display_cmd = f'echo "{details}"; '
+            # Create a text file with issue details
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
+            details = f"MintWatcher Issue Report\n"
+            details += f"Generated: {timestamp}\n"
+            details += f"{'='*60}\n\n"
+            details += f"Issue Type: {issue_type}\n"
+            details += f"Severity: {issue['severity'].upper()}\n"
+            details += f"Title: {issue['title']}\n"
+            details += f"Message: {issue['message']}\n\n"
+            
+            if issue_data:
+                details += f"Additional Details:\n"
+                details += f"{'-'*60}\n"
+                for key, value in issue_data.items():
+                    details += f"  {key}: {value}\n"
+                details += "\n"
+            
+            # For log errors, add recent logs
             if issue_type == 'system_error':
-                # Add command to show recent logs
-                display_cmd += 'echo "\nFetching recent system logs..."; '
-                display_cmd += 'journalctl --since "10 minutes ago" --no-pager -q | tail -20; '
-                
-            display_cmd += 'echo "\nPress Enter to close..."; read'
+                details += f"\nRecent System Logs:\n"
+                details += f"{'-'*60}\n"
+                try:
+                    result = subprocess.run(
+                        ['journalctl', '--since', '10 minutes ago', '--no-pager', '-q'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        log_lines = result.stdout.strip().split('\n')[-20:]  # Last 20 lines
+                        details += '\n'.join(log_lines)
+                    else:
+                        details += "(Unable to fetch system logs)\n"
+                except Exception as e:
+                    details += f"(Error fetching logs: {e})\n"
             
-            return self._launch_terminal_command('bash', '-c', display_cmd)
+            # Create file in home directory for easy access
+            filename = f"mintwatcher_issue_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            filepath = os.path.expanduser(f"~/MintWatcher_Reports/{filename}")
+            
+            # Create directory if needed
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            
+            # Write the file
+            with open(filepath, 'w') as f:
+                f.write(details)
+            
+            print(f"Issue details saved to: {filepath}")
+            
+            # Open with default text editor using xdg-open (non-blocking)
+            subprocess.Popen(
+                ['xdg-open', filepath],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            
+            print(f"Opening file with default editor...")
+            return True
             
         except Exception as e:
             print(f"Failed to show issue details: {e}")
             return False
-            
-    def _launch_terminal_command(self, *args):
-        """Launch a command in a new terminal window"""
-        import tempfile
-        import os
-        import stat
-        
-        # Convert args to a single command string
-        cmd_str = ' '.join(f"'{arg}'" if ' ' in str(arg) else str(arg) for arg in args)
-        
-        print(f"Creating script for terminal command: {cmd_str}")
-        
-        try:
-            # Create a temporary script file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as script_file:
-                script_content = f"""#!/bin/bash
-echo "MintWatcher Terminal Session"
-echo "=============================="
-echo ""
-{cmd_str}
-echo ""
-echo "Press Enter to close this window..."
-read
-# Clean up the script file
-rm "$0"
-"""
-                script_file.write(script_content)
-                script_path = script_file.name
-            
-            # Make script executable
-            os.chmod(script_path, stat.S_IRWXU)
-            
-            print(f"Created script: {script_path}")
-            
-            # Try different methods to launch terminal
-            launch_attempts = [
-                # Method 1: Direct gnome-terminal
-                ['gnome-terminal', '--', 'bash', script_path],
-                
-                # Method 2: Using nohup to detach completely
-                ['nohup', 'gnome-terminal', '--', 'bash', script_path],
-                
-                # Method 3: Using setsid for session management
-                ['setsid', 'gnome-terminal', '--', 'bash', script_path],
-                
-                # Method 4: Alternative terminals
-                ['x-terminal-emulator', '-e', 'bash', script_path],
-                ['xterm', '-e', 'bash', script_path],
-                
-                # Method 5: Desktop file approach (most reliable for notifications)
-                self._create_desktop_launcher(script_path)
-            ]
-            
-            for i, cmd in enumerate(launch_attempts):
-                if cmd is None:  # Skip None results
-                    continue
-                    
-                try:
-                    print(f"Launch attempt {i+1}: {cmd[0] if isinstance(cmd, list) else 'desktop-file'}")
-                    
-                    if isinstance(cmd, list):
-                        process = subprocess.Popen(
-                            cmd,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                            start_new_session=True
-                        )
-                        print(f"Process started with PID {process.pid}")
-                        return True
-                    else:
-                        # Desktop file launch
-                        result = subprocess.run(cmd, check=False)
-                        if result.returncode == 0:
-                            print("Desktop launcher executed successfully")
-                            return True
-                    
-                except FileNotFoundError:
-                    print(f"Command not found: {cmd[0] if isinstance(cmd, list) else cmd}")
-                    continue
-                except Exception as e:
-                    print(f"Launch failed: {e}")
-                    continue
-            
-            print("All launch attempts failed")
-            print(f"Manual execution: bash {script_path}")
-            return False
-            
-        except Exception as e:
-            print(f"Failed to create terminal script: {e}")
-            print(f"Manual command: {cmd_str}")
-            return False
-            
-    def _create_desktop_launcher(self, script_path):
-        """Create a desktop file to launch the script (most reliable method)"""
-        import tempfile
-        
-        try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.desktop', delete=False) as desktop_file:
-                desktop_content = f"""[Desktop Entry]
-Type=Application
-Name=MintWatcher Action
-Exec=gnome-terminal -- bash {script_path}
-NoDisplay=true
-StartupNotify=false
-"""
-                desktop_file.write(desktop_content)
-                desktop_path = desktop_file.name
-            
-            # Make desktop file executable
-            os.chmod(desktop_path, 0o755)
-            
-            return ['gtk-launch', os.path.basename(desktop_path.replace('.desktop', ''))]
-            
-        except Exception as e:
-            print(f"Failed to create desktop launcher: {e}")
-            return None
             
     def _save_config(self):
         """Save current configuration to file"""
