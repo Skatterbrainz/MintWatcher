@@ -15,7 +15,7 @@ A Linux Mint system monitor that provides desktop notifications for performance 
 
 ### Quick Setup
 ```bash
-cd /home/ds0934/Documents/MintWatcher
+cd /home/ds0934/Documents/GitHub/MintWatcher
 chmod +x setup.sh
 ./setup.sh
 ```
@@ -58,9 +58,19 @@ Edit `config.yaml` to customize:
 
 ### Interactive Notifications
 When issues are detected, desktop notifications appear with three buttons:
-- **Ignore**: Adds the issue to exclusions list (won't alert again)
-- **Show**: Opens terminal window displaying issue details and relevant system logs
-- **Investigate**: Launches Warp Terminal with diagnostic prompt for AI-powered investigation
+
+- **Ignore**: Adds the issue to exclusions list in `config.yaml` so it won't alert again
+- **Show**: Opens a new terminal window displaying:
+  - Issue type, severity, and details
+  - All relevant data points
+  - Recent system logs (for log-related issues)
+  - Stays open for you to review
+- **Investigate**: Launches Warp Terminal with AI-powered diagnostic prompts:
+  - Automatically formats investigation questions
+  - Provides context-specific details
+  - Leverages Warp's AI for root cause analysis
+
+**Note**: If terminal windows don't open automatically, MintWatcher creates executable scripts in `~/MintWatcher_Commands/` that you can run manually. Each script is timestamped and contains the exact command that would have been executed.
 
 ## Configuration Options
 
@@ -107,26 +117,25 @@ warp:
 
 ## Sharing with Other Users
 
-To share MintWatcher with other Linux Mint users:
+MintWatcher is now available on GitHub! Other Linux Mint users can install it easily:
 
-1. **Archive the project**: 
-   ```bash
-   tar -czf mintwatcher.tar.gz MintWatcher/
-   ```
+### Option 1: Clone from GitHub (Recommended)
+```bash
+cd ~/Documents/GitHub
+git clone https://github.com/<your-username>/MintWatcher.git
+cd MintWatcher
+chmod +x setup.sh
+./setup.sh
+```
 
-2. **Recipients can extract and run**:
-   ```bash
-   tar -xzf mintwatcher.tar.gz
-   cd MintWatcher
-   ./setup.sh
-   ```
-
-3. **Or clone from repository** (if published to Git):
-   ```bash
-   git clone <repository-url>
-   cd MintWatcher
-   ./setup.sh
-   ```
+### Option 2: Download as Archive
+```bash
+wget https://github.com/<your-username>/MintWatcher/archive/main.zip
+unzip main.zip
+cd MintWatcher-main
+chmod +x setup.sh
+./setup.sh
+```
 
 ## Troubleshooting
 
