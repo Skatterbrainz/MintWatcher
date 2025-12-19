@@ -1,46 +1,46 @@
+daemon:
+  log_file: /tmp/mintwatcher.log
+  pid_file: /tmp/mintwatcher.pid
+exclusions:
+  cpu_spikes: []
+  log_patterns:
+  - error
+  processes: []
 monitoring:
-  # Monitoring thresholds (percentages)
-  cpu_threshold: 80
-  memory_threshold: 85
-  disk_threshold: 90
-  
-  # Check intervals (seconds)
   check_interval: 30
-  
-  # Process monitoring
-  suspicious_process_check: true
+  cpu_threshold: 80
+  disk_threshold: 90
   high_memory_processes: true
-  
-  # System log monitoring
   log_monitoring: true
   log_patterns:
-    - "error"
-    - "failed"
-    - "segfault"
-    - "out of memory"
-
-# Exclusions to prevent false positives
-exclusions:
-  processes: []  # Process names to ignore for high CPU/memory alerts
-  cpu_spikes: [] # Processes allowed to have high CPU usage
-  log_patterns: [] # Log patterns to ignore
-  
-# Notification settings
+  - error
+  - failed
+  - segfault
+  - out of memory
+  memory_threshold: 85
+  suspicious_process_check: true
 notifications:
   enabled: true
-  timeout: 10000  # milliseconds
-  
-# Warp Terminal integration
+  timeout: 10000
 warp:
-  terminal_command: "warp-terminal"
   investigation_prompts:
-    high_cpu: "I'm experiencing high CPU usage on Linux Mint. Process {process_name} is using {cpu_percent}% CPU. Please help me investigate what's causing this high CPU usage, check if it's normal behavior for this process, and suggest ways to optimize or fix the issue."
-    high_memory: "I have a memory usage concern on Linux Mint. Process {process_name} is consuming {memory_mb}MB of RAM. Please analyze why this process is using so much memory, check for potential memory leaks, and suggest optimization strategies."
-    disk_space: "My Linux Mint system is running low on disk space. The {mount_point} filesystem is {usage_percent}% full. Please help me identify what's consuming disk space, find large files or directories I can safely remove, and suggest cleanup strategies."
-    suspicious_process: "I found a potentially suspicious process on my Linux Mint system. Process {process_name} (PID: {pid}) was flagged by my monitoring system. Please help me investigate this process - check its legitimacy, what it does, and whether it poses any security risks."
-    system_error: "My Linux Mint system is showing errors in the system logs. I found this error pattern: {error_pattern}. Here's the error message: {error_message}. Please help me understand what this error means, what might be causing it, and how to fix it."
-
-# Daemon settings
-daemon:
-  pid_file: "/tmp/mintwatcher.pid"
-  log_file: "/tmp/mintwatcher.log"
+    disk_space: My Linux Mint system is running low on disk space. The {mount_point}
+      filesystem is {usage_percent}% full. Please help me identify what's consuming
+      disk space, find large files or directories I can safely remove, and suggest
+      cleanup strategies.
+    high_cpu: I'm experiencing high CPU usage on Linux Mint. Process {process_name}
+      is using {cpu_percent}% CPU. Please help me investigate what's causing this
+      high CPU usage, check if it's normal behavior for this process, and suggest
+      ways to optimize or fix the issue.
+    high_memory: I have a memory usage concern on Linux Mint. Process {process_name}
+      is consuming {memory_mb}MB of RAM. Please analyze why this process is using
+      so much memory, check for potential memory leaks, and suggest optimization strategies.
+    suspicious_process: 'I found a potentially suspicious process on my Linux Mint
+      system. Process {process_name} (PID: {pid}) was flagged by my monitoring system.
+      Please help me investigate this process - check its legitimacy, what it does,
+      and whether it poses any security risks.'
+    system_error: 'My Linux Mint system is showing errors in the system logs. I found
+      this error pattern: {error_pattern}. Here''s the error message: {error_message}.
+      Please help me understand what this error means, what might be causing it, and
+      how to fix it.'
+  terminal_command: warp-terminal

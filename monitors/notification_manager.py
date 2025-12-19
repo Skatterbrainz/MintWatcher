@@ -79,18 +79,18 @@ class NotificationManager:
         
         print("\n" + "-"*60)
         print("Actions:")
-        print("  [S]how    - View full details in text editor")
+        print("  [S]how    - View full details")
         print("  [D]iagnose - Create Warp investigation script")
         print("  [I]gnore  - Add to exclusions (won't alert again)")
+        print("  [X]        - Exit monitoring service")
         print("  [Enter]   - Skip for now")
         print("-"*60)
         
         try:
             # Non-blocking input with timeout
-            response = input("Choose action (S/D/I/Enter): ").strip().lower()
+            response = input("Choose action (S/D/I/X/Enter): ").strip().lower()
             
             if response == 's':
-                print("Creating detailed report...")
                 self._show_issue_details(issue)
             elif response == 'd':
                 print("Creating investigation script...")
@@ -99,6 +99,10 @@ class NotificationManager:
                 print("Adding to exclusions...")
                 self._add_to_exclusions(issue)
                 print("Issue ignored. Won't alert again.")
+            elif response == 'x':
+                print("\nExiting MintWatcher...")
+                # Signal to exit by raising SystemExit
+                raise SystemExit(0)
             else:
                 print("Skipped.")
                 
@@ -277,36 +281,48 @@ echo ""
             return False
             
     def _show_issue_details(self, issue):
-        """Show issue details by creating and opening a text file"""
-        import tempfile
+        """Show issue details in terminal with colored output"""
         import subprocess
         
         issue_type = issue['type']
         issue_data = issue.get('data', {})
+        severity = issue['severity']
+        
+        # Color codes based on severity
+        if severity == 'critical':
+            color = "\033[91m"  # Red
+        elif severity == 'warning':
+            color = "\033[93m"  # Yellow
+        else:
+            color = "\033[96m"  # Cyan
+        
+        reset_color = "\033[0m"
+        bold = "\033[1m"
         
         try:
-            # Create a text file with issue details
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Print header
+            print("\n" + color + "="*60)
+            print(f"{bold}MintWatcher Issue Report{reset_color}{color}")
+            print(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print("="*60 + reset_color)
             
-            details = f"MintWatcher Issue Report\n"
-            details += f"Generated: {timestamp}\n"
-            details += f"{'='*60}\n\n"
-            details += f"Issue Type: {issue_type}\n"
-            details += f"Severity: {issue['severity'].upper()}\n"
-            details += f"Title: {issue['title']}\n"
-            details += f"Message: {issue['message']}\n\n"
+            # Print issue details
+            print(f"\n{bold}Issue Type:{reset_color} {issue_type}")
+            print(f"{bold}Severity:{reset_color} {color}{severity.upper()}{reset_color}")
+            print(f"{bold}Title:{reset_color} {issue['title']}")
+            print(f"{bold}Message:{reset_color} {issue['message']}")
             
+            # Print additional data
             if issue_data:
-                details += f"Additional Details:\n"
-                details += f"{'-'*60}\n"
+                print(f"\n{bold}Additional Details:{reset_color}")
+                print("-"*60)
                 for key, value in issue_data.items():
-                    details += f"  {key}: {value}\n"
-                details += "\n"
+                    print(f"  {key}: {value}")
             
             # For log errors, add recent logs
             if issue_type == 'system_error':
-                details += f"\nRecent System Logs:\n"
-                details += f"{'-'*60}\n"
+                print(f"\n{bold}Recent System Logs:{reset_color}")
+                print("-"*60)
                 try:
                     result = subprocess.run(
                         ['journalctl', '--since', '10 minutes ago', '--no-pager', '-q'],
@@ -316,46 +332,55 @@ echo ""
                     )
                     if result.returncode == 0:
                         log_lines = result.stdout.strip().split('\n')[-20:]  # Last 20 lines
-                        details += '\n'.join(log_lines)
+                        for line in log_lines:
+                            print(line)
                     else:
-                        details += "(Unable to fetch system logs)\n"
+                        print("(Unable to fetch system logs)")
                 except Exception as e:
-                    details += f"(Error fetching logs: {e})\n"
+                    print(f"(Error fetching logs: {e})")
             
-            # Create file in home directory for easy access
+            # Save to file as well for record keeping
             filename = f"mintwatcher_issue_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
             filepath = os.path.expanduser(f"~/MintWatcher_Reports/{filename}")
             
             # Create directory if needed
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
             
+            # Build file content
+            file_content = f"MintWatcher Issue Report\n"
+            file_content += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            file_content += f"{'='*60}\n\n"
+            file_content += f"Issue Type: {issue_type}\n"
+            file_content += f"Severity: {severity.upper()}\n"
+            file_content += f"Title: {issue['title']}\n"
+            file_content += f"Message: {issue['message']}\n\n"
+            
+            if issue_data:
+                file_content += f"Additional Details:\n{'-'*60}\n"
+                for key, value in issue_data.items():
+                    file_content += f"  {key}: {value}\n"
+                file_content += "\n"
+            
+            if issue_type == 'system_error':
+                try:
+                    result = subprocess.run(
+                        ['journalctl', '--since', '10 minutes ago', '--no-pager', '-q'],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        file_content += f"\nRecent System Logs:\n{'-'*60}\n"
+                        log_lines = result.stdout.strip().split('\n')[-20:]
+                        file_content += '\n'.join(log_lines)
+                except:
+                    pass
+            
             # Write the file
             with open(filepath, 'w') as f:
-                f.write(details)
+                f.write(file_content)
             
-            print(f"\n✓ Issue details saved to: {filepath}")
-            print(f"  Opening in editor...")
-            
-            # Try to open with default editor
-            try:
-                subprocess.Popen(
-                    ['xed', filepath],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                print(f"  Opened with xed")
-            except:
-                try:
-                    subprocess.Popen(
-                        ['xdg-open', filepath],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
-                    )
-                    print(f"  Opened with xdg-open")
-                except:
-                    print(f"  Could not open automatically. Open manually:")
-                    print(f"  xed {filepath}")
-            
+            print(f"\n{bold}Report saved to:{reset_color} {filepath}\n")
             return True
             
         except Exception as e:
