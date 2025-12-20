@@ -4,23 +4,23 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-MintWatcher is a Linux Mint system monitor that provides desktop notifications for performance and security issues. It integrates with Warp Terminal to enable AI-powered investigation of system issues.
+MintWatcher is a Linux Mint system monitor that provides one-shot system checks with numbered issue reporting. It integrates with Warp Terminal to enable AI-powered investigation of system issues.
 
 **Key capabilities:**
-- Real-time monitoring of CPU, memory, disk usage, processes, and system logs
-- Interactive terminal prompts when issues are detected
+- On-demand system checks (CPU, memory, disk, processes, system logs)
+- Numbered issue listing with severity indicators
 - Creates investigation scripts for Warp Terminal AI
-- Configurable exclusions to prevent false positives
+- Configurable thresholds and exclusions
 
 ## Architecture
 
 ### Core Components
 
 **Main orchestrator:** `mintwatcher.py`
-- CLI entry point with argument parsing
-- Manages daemon lifecycle (start/stop/status)
-- Coordinates monitoring loop and notifications
-- Handles PID file and signal management
+- CLI entry point with argument parsing (`--check`, `--diagnose`, `--version`)
+- One-shot execution model (runs and exits)
+- Caches issues to `/tmp/mintwatcher_last_check.json` for diagnose command
+- Creates investigation scripts at `~/MintWatcher_Commands/`
 
 **System monitoring:** `monitors/system_monitor.py`
 - `SystemMonitor` class performs all system checks
@@ -28,13 +28,11 @@ MintWatcher is a Linux Mint system monitor that provides desktop notifications f
 - Returns list of issue dictionaries with type, severity, title, message, and data fields
 - Uses `psutil` for system metrics and `journalctl` for log monitoring
 
-**Notification system:** `monitors/notification_manager.py`
-- `NotificationManager` class handles desktop notifications and terminal prompts
-- Uses `gi.repository.Notify` (libnotify) for desktop popups
-- Interactive terminal workflow: Show details / Create investigation script / Add to exclusions
-- Creates two types of output files:
-  - Issue reports: `~/MintWatcher_Reports/mintwatcher_issue_*.txt`
-  - Investigation scripts: `~/MintWatcher_Commands/investigate_*.sh`
+**Issue caching:** JSON-based cache system
+- Issues from `--check` are cached to `/tmp/mintwatcher_last_check.json`
+- Cache includes timestamp and full issue data
+- `--diagnose` command reads from cache to generate scripts
+- Cache cleared when no issues found
 
 **Configuration:** `config.yaml`
 - Monitoring thresholds and intervals
@@ -44,12 +42,22 @@ MintWatcher is a Linux Mint system monitor that provides desktop notifications f
 
 ### Data Flow
 
-1. Main loop in `mintwatcher.py` calls `monitor.check_system()` every `check_interval` seconds
-2. `SystemMonitor` runs all enabled checks and returns list of issues
-3. For each issue, `NotificationManager.send_notification()` is called
-4. Manager checks exclusions, shows desktop notification, and prompts in terminal
-5. User can ignore (adds to config exclusions), show details, or create investigation script
-6. Investigation scripts use `warp-terminal agent run --prompt` to launch AI diagnostics
+**Check workflow:**
+1. User runs `./mintwatcher.py --check`
+2. `MintWatcher.check_system()` calls `monitor.check_system()`
+3. `SystemMonitor` runs all enabled checks and returns list of issues
+4. Issues are cached to JSON file with timestamp
+5. Issues displayed with numbers, severity colors, and key data points
+6. Command exits after displaying results
+
+**Diagnose workflow:**
+1. User runs `./mintwatcher.py --diagnose N` where N is issue number
+2. `MintWatcher.diagnose_issue()` loads cached issues from JSON
+3. Selected issue is used to generate investigation script
+4. Script created at `~/MintWatcher_Commands/investigate_*.sh`
+5. Script uses Warp prompt template from config with issue data interpolated
+6. Script auto-opens in `xed` editor for review
+7. User runs script to launch `warp-terminal agent run --prompt`
 
 ### Issue Structure
 
@@ -71,25 +79,17 @@ All issues follow this schema:
 ### Running and Testing
 
 ```bash
-# Start monitoring (foreground with output)
-./mintwatcher.py --start
+# Check system for issues
+./mintwatcher.py --check
 
-# Check status and current metrics
-./mintwatcher.py --status
+# Diagnose specific issue (e.g., issue #2)
+./mintwatcher.py --diagnose 2
 
-# Stop all instances
-./mintwatcher.py --stop
+# Show version
+./mintwatcher.py --version
 
 # Run basic monitoring validation
 ./test_monitoring.py
-
-# Integration test for start/stop
-./test_start_stop.sh
-
-# Test specific functionality
-./test_warp_integration.py
-./test_show_functionality.py
-./test_fallback.py
 ```
 
 ### Setup and Installation
@@ -110,15 +110,15 @@ chmod +x mintwatcher.py
 1. Add method to `SystemMonitor` following `_check_*()` pattern
 2. Call from `check_system()` method
 3. Add investigation prompt template to `config.yaml` under `warp.investigation_prompts`
-4. Handle new type in `NotificationManager._add_to_exclusions()` if needed
+4. Update issue type enum in docstring/comments
 
-**Change notification behavior:**
-- Edit `NotificationManager._terminal_prompt()` for interaction flow
-- Modify `_show_issue_details()` or `_launch_warp_investigation()` for action handlers
+**Change output formatting:**
+- Edit `MintWatcher.check_system()` to modify how issues are displayed
+- Color codes in `_get_color_for_severity()` method
+- Key info extraction logic determines what data appears in summary
 
 **Adjust thresholds or exclusions:**
-- Edit `config.yaml` (changes persist)
-- Or use "Ignore" action when notification appears (automatically updates config)
+- Edit `config.yaml` directly (all changes are manual now)
 
 ## Important Notes
 
@@ -128,10 +128,11 @@ chmod +x mintwatcher.py
 - Warp Terminal must be in PATH as `warp-terminal`
 - System commands used: `journalctl`, `ps`
 
-### PID Management
-- PID file location: `/tmp/mintwatcher.pid` (configurable in `config.yaml`)
-- `--stop` command kills processes by PID file and `ps aux` search
-- Handles stale PID files automatically
+### Issue Caching
+- Cache file: `/tmp/mintwatcher_last_check.json`
+- Contains timestamp and array of issue objects
+- Automatically cleared when no issues detected
+- Required for `--diagnose` command to work
 
 ### Warp Integration
 - Investigation scripts call: `warp-terminal agent run --prompt '<prompt>'`
@@ -139,13 +140,14 @@ chmod +x mintwatcher.py
 - Scripts are saved to `~/MintWatcher_Commands/` as executable `.sh` files
 - Opens in `xed` or falls back to `xdg-open`
 
-### Threading Model
-- Main thread waits on signal handlers
-- `_monitoring_loop()` runs in daemon thread
-- No complex synchronization needed (read-only config access from monitoring thread)
+### Execution Model
+- Single-threaded, synchronous execution
+- No daemon or background processes
+- Each invocation runs checks and exits immediately
+- No signal handlers or state management needed
 
 ### Exclusion Logic
-- Exclusions prevent notifications entirely (checked in `_is_excluded()`)
-- Three exclusion lists: `processes`, `cpu_spikes`, `log_patterns`
+- Exclusions filter issues in `SystemMonitor` before returning to main script
+- Three exclusion lists in config: `processes`, `cpu_spikes`, `log_patterns`
 - High CPU checks both `processes` and `cpu_spikes` lists
-- Adding exclusion saves config immediately via `_save_config()`
+- Exclusions must be added manually to `config.yaml`

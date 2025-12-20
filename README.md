@@ -34,21 +34,18 @@ chmod +x mintwatcher.py
 
 ## Usage
 
-**Quick Start**: Run `./mintwatcher.py --start` to begin monitoring. Press `Ctrl+C` to stop, or use `./mintwatcher.py --stop` from another terminal to terminate all instances.
+**Quick Start**: Run `./mintwatcher.py --check` to scan your system for issues.
 
 ### Basic Commands
 ```bash
 # Show help
 ./mintwatcher.py --help
 
-# Check current status
-./mintwatcher.py --status
+# Check system for issues
+./mintwatcher.py --check
 
-# Start monitoring (foreground)
-./mintwatcher.py --start
-
-# Stop all running instances
-./mintwatcher.py --stop
+# Diagnose a specific issue (e.g., issue #2 from --check output)
+./mintwatcher.py --diagnose 2
 
 # Show version
 ./mintwatcher.py --version
@@ -61,33 +58,36 @@ Edit `config.yaml` to customize:
 - **Exclusions**: Processes and patterns to ignore
 - **Warp integration**: Investigation prompt templates
 
-### Interactive Notifications
-When issues are detected, desktop notifications appear with three buttons:
+### Example Workflow
+1. Run `./mintwatcher.py --check` to scan your system
+2. Review the numbered list of issues with severity levels
+3. Choose an issue to investigate (e.g., issue #2)
+4. Run `./mintwatcher.py --diagnose 2`
+5. MintWatcher creates an investigation script at `~/MintWatcher_Commands/`
+6. Script automatically opens in your editor
+7. Run the script: `bash ~/MintWatcher_Commands/investigate_*.sh`
+8. Warp Terminal launches with AI-powered diagnostics
 
-- **Ignore**: Adds the issue to exclusions list in `config.yaml` so it won't alert again
-- **Show**: Opens a text file in your default editor containing:
-  - Issue type, severity, and title
-  - All relevant data points
-  - Recent system logs (for log-related issues)
-  - Saved to `~/MintWatcher_Reports/` for future reference
-- **Investigate**: Creates and opens an executable investigation script:
-  - Pre-configured with Warp Terminal AI commands
-  - Includes context-specific investigation prompts
-  - Saved to `~/MintWatcher_Commands/` for easy execution
-  - Simply save and run the script to start investigation
+**Output Examples:**
+
+```bash
+$ ./mintwatcher.py --check
+
+⚠ Found 2 issue(s):
+
+1. [WARNING] High CPU Usage (85.2%)
+   System CPU usage is 85.2%, mainly caused by chrome
+   Process: chrome | CPU: 85.2%
+
+2. [WARNING] High Memory Usage (87.5%)
+   System memory usage is 87.5%, top process: firefox (2048MB)
+   Process: firefox | Memory: 2048MB
+
+To diagnose an issue, run: ./mintwatcher.py --diagnose <number>
+```
 
 **File Locations**:
-- Issue reports: `~/MintWatcher_Reports/mintwatcher_issue_*.txt`
 - Investigation scripts: `~/MintWatcher_Commands/investigate_*.sh`
-
-### Example Workflow
-1. MintWatcher detects high CPU usage and shows a notification
-2. Click **"Show"** → Text file opens with process details
-3. Review the information in your text editor
-4. Click **"Investigate"** → Investigation script opens
-5. Save the script and run it: `bash ~/MintWatcher_Commands/investigate_*.sh`
-6. Warp Terminal launches with AI-powered diagnostics
-7. If it's a false positive, click **"Ignore"** to suppress future alerts
 
 ## Configuration Options
 
