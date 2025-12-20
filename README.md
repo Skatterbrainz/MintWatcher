@@ -1,15 +1,15 @@
 # MintWatcher
 
-A Linux Mint system monitor that provides desktop notifications for performance and security issues, with interactive "Ignore" and "Investigate" buttons that integrate with Warp Terminal.
+A Linux Mint system monitor that performs on-demand health checks with numbered issue reporting. Integrates with Warp Terminal to enable AI-powered investigation of system issues.
 
 ## Features
 
-- **Real-time monitoring**: CPU, memory, disk usage, and process monitoring
-- **Interactive notifications**: Desktop popups with Ignore/Investigate buttons
-- **Warp Terminal integration**: "Investigate" button launches Warp with diagnostic prompts
-- **Configurable exclusions**: Ignore false positives automatically
-- **System log monitoring**: Detect errors in system logs
-- **CLI-only interface**: No GUI required, perfect for server environments
+- **One-shot system checks**: Run on-demand without background daemons
+- **Numbered issue reporting**: Clean, organized output with severity indicators
+- **Warp Terminal integration**: Generate investigation scripts for AI diagnostics
+- **Configurable thresholds**: Customize CPU, memory, and disk usage limits
+- **System log monitoring**: Detect errors in system logs via journalctl
+- **Exclusion lists**: Filter out known false positives
 
 ## Installation
 
